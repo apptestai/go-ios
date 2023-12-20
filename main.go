@@ -64,7 +64,7 @@ func Main() {
 
 Usage:
   ios activate [options]
-  ios listen [options] [--once]
+  ios listen [options]
   ios list [options] [--details]
   ios info [options]
   ios image list [options]
@@ -137,7 +137,7 @@ The commands work as following:
 	Specify -v for debug logging and -t for dumping every message.
 
    ios activate [options]                                             Activate a device
-   ios listen [options] [--once]                                      Keeps a persistent connection open and notifies about newly connected or disconnected devices. If --once is specified, it is not keep listening.
+   ios listen [options]                                               Keeps a persistent connection open and notifies about newly connected or disconnected devices.
    ios list [options] [--details]                                     Prints a list of all connected device's udids. If --details is specified, it includes version, name and model of each device.
    ios info [options]                                                 Prints a dump of Lockdown getValues.
    ios image list [options]                                           List currently mounted developers images' signatures
@@ -262,8 +262,7 @@ The commands work as following:
 
 	b, _ := arguments.Bool("listen")
 	if b {
-		b, _ = arguments.Bool("--once")
-		startListening(b)
+		startListening()
 		return
 	}
 
@@ -1703,7 +1702,7 @@ func outputProcessListNoJSON(device ios.DeviceEntry, processes []instruments.Pro
 	}
 }
 
-func _startListening() {
+func startListening() {
 	go func() {
 		for {
 			deviceConn, err := ios.NewDeviceConnection(ios.GetUsbmuxdSocket())
@@ -1735,39 +1734,6 @@ func _startListening() {
 	c := make(chan os.Signal, syscall.SIGTERM)
 	signal.Notify(c, os.Interrupt)
 	<-c
-}
-
-func _startListeningOnce() {
-	deviceConn, err := ios.NewDeviceConnection(ios.GetUsbmuxdSocket())
-	defer deviceConn.Close()
-	if err != nil {
-		log.Errorf("could not connect to %s with err %+v, will retry in 3 seconds...", ios.GetUsbmuxdSocket(), err)
-		return
-	}
-	muxConnection := ios.NewUsbMuxConnection(deviceConn)
-
-	attachedReceiver, err := muxConnection.Listen()
-	if err != nil {
-		log.Error("Failed issuing Listen command, will retry in 3 seconds", err)
-		deviceConn.Close()
-		return
-	}
-	for {
-		msg, err := attachedReceiver()
-		if err != nil {
-			log.Error("Stopped listening because of error")
-			break
-		}
-		fmt.Println(convertToJSONString((msg)))
-	}
-}
-
-func startListening(once bool) {
-	if once {
-		_startListeningOnce()
-	} else {
-		_startListening()
-	}
 }
 
 func printDeviceInfo(device ios.DeviceEntry) {
