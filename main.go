@@ -1618,25 +1618,27 @@ func printDeviceList(details bool, usb bool) {
 		exitIfError("failed getting device list", err)
 	}
 
+	if usb {
+		tempDeviceList := make([]ios.DeviceEntry, 0)
+		for _, device := range deviceList.DeviceList {
+			if device.Properties.ConnectionType == "USB" {
+				tempDeviceList = append(tempDeviceList, device)
+			}
+		}
+		deviceList.DeviceList = tempDeviceList
+	}
+	
 	if details {
 		if JSONdisabled {
-			outputDetailedListNoJSON(deviceList, usb)
+			outputDetailedListNoJSON(deviceList)
 		} else {
-			outputDetailedList(deviceList, usb)
+			outputDetailedList(deviceList)
 		}
 	} else {
 		if JSONdisabled {
-			if usb {
-				for _, device := range deviceList.DeviceList {
-					if usb && device.Properties.ConnectionType == "USB" {
-						fmt.Println(device.Properties.SerialNumber)
-					}
-				}
-			} else {
-				fmt.Print(deviceList.String())
-			}
+			fmt.Print(deviceList.String())
 		} else {
-			fmt.Println(convertToJSONString(deviceList.CreateMapForJSONConverter(usb)))
+			fmt.Println(convertToJSONString(deviceList.CreateMapForJSONConverter()))
 		}
 	}
 }
@@ -1649,12 +1651,9 @@ type detailsEntry struct {
 	ConnectionType string
 }
 
-func outputDetailedList(deviceList ios.DeviceList, usb bool) {
+func outputDetailedList(deviceList ios.DeviceList) {
 	result := make([]detailsEntry, len(deviceList.DeviceList))
 	for i, device := range deviceList.DeviceList {
-		if usb && device.Properties.ConnectionType != "USB" {
-			continue
-		}
 		udid := device.Properties.SerialNumber
 		allValues, err := ios.GetValues(device)
 		exitIfError("failed getting values", err)
@@ -1665,11 +1664,8 @@ func outputDetailedList(deviceList ios.DeviceList, usb bool) {
 	}))
 }
 
-func outputDetailedListNoJSON(deviceList ios.DeviceList, usb bool) {
+func outputDetailedListNoJSON(deviceList ios.DeviceList) {
 	for _, device := range deviceList.DeviceList {
-		if usb && device.Properties.ConnectionType != "USB" {
-			continue
-		}
 		udid := device.Properties.SerialNumber
 		allValues, err := ios.GetValues(device)
 		exitIfError("failed getting values", err)

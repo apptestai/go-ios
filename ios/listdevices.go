@@ -35,12 +35,9 @@ func (deviceList DeviceList) String() string {
 }
 
 // CreateMapForJSONConverter creates a simple json ready map containing all UDIDs
-func (deviceList DeviceList) CreateMapForJSONConverter(usb bool) map[string]interface{} {
+func (deviceList DeviceList) CreateMapForJSONConverter() map[string]interface{} {
 	devices := make([]string, len(deviceList.DeviceList))
 	for i, element := range deviceList.DeviceList {
-		if usb && element.Properties.ConnectionType != "USB" {
-			continue
-		}
 		devices[i] = element.Properties.SerialNumber
 	}
 	return map[string]interface{}{"deviceList": devices}
