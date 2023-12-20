@@ -65,7 +65,7 @@ func Main() {
 Usage:
   ios activate [options]
   ios listen [options]
-  ios list [options] [--details]
+  ios list [options] [--details] [--usb]
   ios info [options]
   ios image list [options]
   ios image mount [--path=<imagepath>] [options]
@@ -138,7 +138,7 @@ The commands work as following:
 
    ios activate [options]                                             Activate a device
    ios listen [options]                                               Keeps a persistent connection open and notifies about newly connected or disconnected devices.
-   ios list [options] [--details]                                     Prints a list of all connected device's udids. If --details is specified, it includes version, name and model of each device.
+   ios list [options] [--details] [--usb]                             Prints a list of all connected device's udids. If --details is specified, it includes version, name and model of each device. If --usb is specified, ignores devices that are connected by network.
    ios info [options]                                                 Prints a dump of Lockdown getValues.
    ios image list [options]                                           List currently mounted developers images' signatures
    ios image mount [--path=<imagepath>] [options]                     Mount a image from <imagepath>
@@ -274,7 +274,8 @@ The commands work as following:
 
 	if listCommand && !diagnosticsCommand && !imageCommand && !deviceStateCommand && !profileCommand {
 		b, _ = arguments.Bool("--details")
-		printDeviceList(b)
+		usb, _ := arguments.Bool("--usb")
+		printDeviceList(b, usb)
 		return
 	}
 
@@ -1611,7 +1612,7 @@ func processList(device ios.DeviceEntry, applicationsOnly bool) {
 	}
 }
 
-func printDeviceList(details bool) {
+func printDeviceList(details bool, usb bool) {
 	deviceList, err := ios.ListDevices()
 	if err != nil {
 		exitIfError("failed getting device list", err)
@@ -1619,15 +1620,23 @@ func printDeviceList(details bool) {
 
 	if details {
 		if JSONdisabled {
-			outputDetailedListNoJSON(deviceList)
+			outputDetailedListNoJSON(deviceList, usb)
 		} else {
-			outputDetailedList(deviceList)
+			outputDetailedList(deviceList, usb)
 		}
 	} else {
 		if JSONdisabled {
-			fmt.Print(deviceList.String())
+			if usb {
+				for _, device := range deviceList.DeviceList {
+					if usb && device.Properties.ConnectionType == "USB" {
+						fmt.Println(device.Properties.SerialNumber)
+					}
+				}
+			} else {
+				fmt.Print(deviceList.String())
+			}
 		} else {
-			fmt.Println(convertToJSONString(deviceList.CreateMapForJSONConverter()))
+			fmt.Println(convertToJSONString(deviceList.CreateMapForJSONConverter(usb)))
 		}
 	}
 }
@@ -1640,9 +1649,12 @@ type detailsEntry struct {
 	ConnectionType string
 }
 
-func outputDetailedList(deviceList ios.DeviceList) {
+func outputDetailedList(deviceList ios.DeviceList, usb bool) {
 	result := make([]detailsEntry, len(deviceList.DeviceList))
 	for i, device := range deviceList.DeviceList {
+		if usb && device.Properties.ConnectionType != "USB" {
+			continue
+		}
 		udid := device.Properties.SerialNumber
 		allValues, err := ios.GetValues(device)
 		exitIfError("failed getting values", err)
@@ -1653,8 +1665,11 @@ func outputDetailedList(deviceList ios.DeviceList) {
 	}))
 }
 
-func outputDetailedListNoJSON(deviceList ios.DeviceList) {
+func outputDetailedListNoJSON(deviceList ios.DeviceList, usb bool) {
 	for _, device := range deviceList.DeviceList {
+		if usb && device.Properties.ConnectionType != "USB" {
+			continue
+		}
 		udid := device.Properties.SerialNumber
 		allValues, err := ios.GetValues(device)
 		exitIfError("failed getting values", err)
