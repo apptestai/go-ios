@@ -14,14 +14,14 @@ import (
 )
 
 func runXUITestWithBundleIdsXcode12Ctx(ctx context.Context, bundleID string, testRunnerBundleID string, xctestConfigFileName string,
-	device ios.DeviceEntry, args []string, env []string, testsToRun []string, testsToSkip []string, testListener *TestListener,
+	device ios.DeviceEntry, args []string, env []string, testsToRun []string, testsToSkip []string, testListener *TestListener, isXCTest bool,
 ) ([]TestSuite, error) {
 	conn, err := dtx.NewUsbmuxdConnection(device, testmanagerdiOS14)
 	if err != nil {
 		return make([]TestSuite, 0), fmt.Errorf("RunXUITestWithBundleIdsXcode12Ctx: cannot create a usbmuxd connection to testmanagerd: %w", err)
 	}
 
-	testSessionId, xctestConfigPath, testConfig, testInfo, err := setupXcuiTest(device, bundleID, testRunnerBundleID, xctestConfigFileName, testsToRun, testsToSkip)
+	testSessionId, xctestConfigPath, testConfig, testInfo, err := setupXcuiTest(device, bundleID, testRunnerBundleID, xctestConfigFileName, testsToRun, testsToSkip, isXCTest)
 	if err != nil {
 		return make([]TestSuite, 0), fmt.Errorf("RunXUITestWithBundleIdsXcode12Ctx: cannot setup test config: %w", err)
 	}
@@ -59,7 +59,7 @@ func runXUITestWithBundleIdsXcode12Ctx(ctx context.Context, bundleID string, tes
 	}
 	defer pControl.Close()
 
-	pid, err := startTestRunner12(pControl, xctestConfigPath, testRunnerBundleID, testSessionId.String(), testInfo.testrunnerAppPath+"/PlugIns/"+xctestConfigFileName, args, env)
+	pid, err := startTestRunner12(pControl, xctestConfigPath, testRunnerBundleID, testSessionId.String(), testInfo.testApp.path+"/PlugIns/"+xctestConfigFileName, args, env)
 	if err != nil {
 		return make([]TestSuite, 0), fmt.Errorf("RunXUITestWithBundleIdsXcode12Ctx: cannot start test runner: %w", err)
 	}
@@ -77,16 +77,29 @@ func runXUITestWithBundleIdsXcode12Ctx(ctx context.Context, bundleID string, tes
 	}
 
 	select {
+	case <-conn.Closed():
+		log.Debug("conn closed")
+		if conn.Err() != dtx.ErrConnectionClosed {
+			log.WithError(conn.Err()).Error("conn closed unexpectedly")
+		}
+		break
+	case <-conn2.Closed():
+		log.Debug("conn2 closed")
+		if conn2.Err() != dtx.ErrConnectionClosed {
+			log.WithError(conn2.Err()).Error("conn2 closed unexpectedly")
+		}
+		break
 	case <-testListener.Done():
 		break
 	case <-ctx.Done():
-		log.Infof("Killing test runner with pid %d ...", pid)
-		err = pControl.KillProcess(pid)
-		if err != nil {
-			log.Infof("Nothing to kill, process with pid %d is already dead", pid)
-		} else {
-			log.Info("Test runner killed with success")
-		}
+		break
+	}
+	log.Infof("Killing test runner with pid %d ...", pid)
+	err = pControl.KillProcess(pid)
+	if err != nil {
+		log.Infof("Nothing to kill, process with pid %d is already dead", pid)
+	} else {
+		log.Info("Test runner killed with success")
 	}
 
 	log.Debugf("Done running test")

@@ -144,7 +144,14 @@ func (t *tunnelService) createTunnelListener() (tunnelListener, error) {
 		return tunnelListener{}, err
 	}
 	port := createListener["port"].(float64)
-	devPublicKey := createListener["devicePublicKey"].(string)
+	devPublicKeyRaw, found := createListener["devicePublicKey"]
+	if !found {
+		return tunnelListener{}, fmt.Errorf("no public key found")
+	}
+	devPublicKey, isString := devPublicKeyRaw.(string)
+	if !isString {
+		return tunnelListener{}, fmt.Errorf("public key is not a string")
+	}
 	devPK, err := base64.StdEncoding.DecodeString(devPublicKey)
 	if err != nil {
 		return tunnelListener{}, err
@@ -272,6 +279,10 @@ func (t *tunnelService) verifyPair() error {
 		return err
 	}
 
+	if devicePublicKeyBytes == nil {
+		_ = t.controlChannel.writeEvent(pairVerifyFailed{})
+		return fmt.Errorf("verifyPair: did not get public key from device. Can not verify pairing")
+	}
 	devicePublicKey, err := ecdh.X25519().NewPublicKey(devicePublicKeyBytes)
 	if err != nil {
 		return err

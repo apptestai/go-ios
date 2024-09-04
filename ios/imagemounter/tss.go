@@ -20,7 +20,8 @@ type tssClient struct {
 
 func newTssClient() tssClient {
 	c := &http.Client{
-		Timeout: 1 * time.Minute,
+		Timeout:   1 * time.Minute,
+		Transport: http.DefaultTransport,
 	}
 
 	return tssClient{
@@ -60,17 +61,23 @@ func (t tssClient) getSignature(identity buildIdentity, identifiers personalizat
 		"UID_MODE": false,
 	}
 
+	for k, v := range identifiers.AdditionalIdentifiers {
+		params[k] = v
+	}
+
 	buf := bytes.NewBuffer(nil)
 	enc := plist.NewEncoderForFormat(buf, plist.XMLFormat)
 	err := enc.Encode(params)
 	if err != nil {
 		return nil, fmt.Errorf("getSignature: failed to encode request body: %w", err)
 	}
+
 	h := http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
 			},
+			Proxy: t.h.Transport.(*http.Transport).Proxy,
 		},
 		Timeout: 1 * time.Minute,
 	}
